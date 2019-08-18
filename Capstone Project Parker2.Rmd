@@ -1,0 +1,425 @@
+---
+title: "Capstone Project Data Wrangling Parker"
+author: "Cassandra Parker"
+date: "7/25/2019"
+output: html_document
+---
+
+## Introduction 
+In my last few years of teaching Calculus I have noticed an increase in the D,W, F rates amongst students not only in  College Algebra sequences, but also Calculus at Clark Atlanta University.This is not to discredit the alarming failure rate for college Algebra amongst majoriy Colleges and Universities.  Students are not as prepared and sometimes have weak background of Algebra entering into the course which is an imperative thing to complete Calculus sucessfully. In 2016 clark Atlanta started an inniative to implement intervention to the STEM related courses. The course redisgn began in spring 2018 for THe Calulus course. Students are   After tlaking with my mentor and Dr. Lewis, I have decided to team with Dr. Lewis in exploring propensity score matching to predict/ show the students readiness for the Calculus courses at Clark Atlanta University. I will also take a look into if students perform better in Fall versus Spring Semesters with th.  Analyzing this data could lead to an increase in passing rate, which inevitably assists on retention rates, then graduation rates. 
+
+My clients for this project will be senior leaders (presidents and vice presidents for academic affairs) at Clark Atlanta University.  I can also include myself and the Mathematics Department Chair. The analysis of the data would help all of us see if the intervention is improving the grade D and  F rates. 
+
+I will use the latest data requested from the Office of Planning, Assessment & Institutional Research at Clark Atlanta. Fall terms of 2017 and 2019 school will be used. Since propensity scoring is matching students that have the same characteristics. My approach is to clean data, and analyze scores based on SAT Mathematics Composite Scores and ACT, GPA. As well as determine the effictiveness of the Intervention being used at Clark Atlanta. 
+
+In propensity score matching or using any crucial statisics it is best that your varables are listed as 1 and 0 for yes and no respectively. 
+The variables used are listed below:
+
+Instructor - the person that taught the class
+Major - the student's major area of study
+Grade - the letter grade that the student earned in the course
+Gender - the student's self reported gender male = 0, female = 1
+Race - Black/ African American =1, Others (Non-Resident/ Alien, unknown) = 0
+1st Generation - The students that are the first to attend college.  First = 0,   Not the First to Attend College = 1
+Score - The numeric grade that corresponds to the letter grade (90=A, 80=B, 70=C, 60=D, 50=F).
+Intervention - Determines the student group.  Treatment =1, Control =0
+Pell - The student is eligible to receive a grant from the federal government.  Yes =1, No =0
+Standardized Score - The standardized z-score for numeric grades.
+
+# Data wrangling
+Data wrangling is necessary to "clean up" data in order to anylze your information. 
+The packages below are necessary for this part of the Data Wrangling project. 
+Load the necessary packages. I had to install a few packages before loading. 
+
+Data set that was provided from Clark Atlanta has been cleaned. The techniques used were necessary in removing variables and changing names of columns, adding variables and few calculations. 
+
+The original data frame included blank variables. There were some irrelevant information that was included in the original data frame that would not be necessary for propensity score matching algorithm. Removing these variables reduce the data frame to 15 variables, though there are some variable that could be still removed, keeping them would add to interesting data.
+
+Changing the column Names:There are 18 variables included in the data frame, to which majority of the variables went through a name change. As the data was imported into R studio, there were several names that were too long and had complexities of “_”.  Concise name were given to provide more accurate information in the columns and make the names shorter. 
+
+Adding Variables and Data: Two variables were necessary for building the model.  A treatment column and a column that displayed standardized z scores for the final grade earned.  In the treatment column, an if-else statement was written to place a 1 for the observation that was treated and a 0 otherwise.  This information helped to accurately and easily determine the control and treatment groups.   Freshman students had various scores for their Sat. Since there is a new version of the SAT, it was best to convert the Old Sat scores to the new SAT scores and combine them in one column. Since there are only 117 observations of this it is best to not eliminate this information. 
+
+Standardized z-score: In the standardized z-score column, a function was written to include a standardized score for each observation in the “Score” column of the data frame.  This standardized z-score normalizes the data and has a mean of 0 and a standard deviation of 1.  It represents the signed fractional number of standard deviations by which the value of an observation or data point lies above or below the mean value of the data set that is measured.  Values above the mean have positive standard scores, while values below the mean have negative standard scores.  Adding this column increased the data frame to 15 variables.
+
+
+```{r,warning=FALSE,message=FALSE}
+library(tidyverse)
+```
+
+Load the Fall Semester data  for 2017 and 2018.
+
+```{r,message=FALSE, warning=FALSE}
+capdat <- read_csv("capdatar.csv")
+```
+First take a look at our data. We will notice the number of variables, observations, and column names before proceeding.
+
+```{r,message=FALSE, warning=FALSE}
+glimpse(capdat)
+```
+It is best to select the variables of interest. Therefore, remove the columns that are not necessary. Since all data is already Calculus courses from Fall semesters 2017 and 2018, we can eliminate those columns along with a few other columns, such as highschool and hsgpa.Let us only select the variables of interest for us.
+
+```{r,message=FALSE, warning=FALSE}
+capdat<-dplyr::select(capdat, -c(COURSE_NUMBER, STUDENT_ID, ACADEMIC_TERM,  HIGH_SCHOOL, HSGPA))
+```
+
+```{r}
+view(capdat)
+```
+
+Another concept in data wrangling is to make things more simple and clear. Rename the cloumn names to be more intuitive. 
+```{r,message=FALSE, warning=FALSE}
+colnames(capdat) <- c('Instructor', 'Student', 'Major', 'Grade', 'Score', 'NewSAT', 'OldSAT', 'ACT', 'Gender', 'Race', 'Pell', 'Generation', 'Intervention' )
+```
+
+Old Sat Scores need to be converted to format with new Sat Scores. If score is between, 300-399 then add 50 points, if score 400-499 then add 40 points, if score between 500-599 then add 30 points, if score between 600-699, add 20 points.
+
+```{r,message=FALSE, warning=FALSE}
+capdat <- capdat %>% mutate(NewSATScore =
+  case_when(
+    OldSAT >= 300 & OldSAT < 400 ~ (OldSAT + 50),
+    OldSAT >= 400 & OldSAT < 500 ~ (OldSAT + 40),
+    OldSAT >= 500 & OldSAT < 600 ~ (OldSAT + 30),
+    OldSAT >= 600 & OldSAT < 700 ~ (OldSAT + 20)
+  )
+)
+```
+
+Include a function to the added column that calculates the standardized score. We can use the `scale` function for doing the same. 
+
+```{r,message=FALSE, warning=FALSE}
+capdat <- capdat %>% mutate(
+  Std_Score = as.numeric(scale(Score))
+)
+```
+Create a csv file of the clean data frame for the project submission. 
+
+```{r}
+write.csv(capdat, file = "capdat.csv")
+```
+
+## Exploratory Data Analysis
+
+Now that we have our clean data, we can start exploring it. **Exploratory Data Analysis** or EDA, is where we start asking questions about our  data and start answering them through plots and graphs. Before answering questions, it is also a good idea to get a feel of how many missing values we have in our dataset. The `colSums()` function is one way of doing it.
+
+```{r,message=FALSE, warning=FALSE}
+colSums(is.na(capdat))
+```
+We can see from looking at that data that there are a few columns missing data. Plotting data we will use most data that is not missing any values to draw some different observations. Take a look at a few factors, plot grades versus intervention. 
+
+
+Seeing that `Grade` has no missing values, we can base our analysis on this variable. Let us see based on the `Grade` the performance of the students who received intervention or not. 
+
+```{r}
+(grade_tbl <- capdat %>% select(Grade, Intervention) %>% table())
+```
+
+We can also see the above information as a proportion.
+
+```{r}
+grade_tbl %>% prop.table()
+```
+
+Take a look at a few factors, plot grades versus intervention. 
+
+
+```{r,message=FALSE, warning=FALSE}
+capdat$Intervention <- as.factor(capdat$Intervention)
+ggplot(capdat, aes(x = Grade, fill = Intervention)) + geom_bar()
+```
+```{r,message=FALSE, warning=FALSE}
+capdat %>% select(Intervention) %>% table() %>% prop.table()
+```
+Our proportion tells us that 65% of the students did not have intervention (control group)and 34% did. Though the control group has a significant amount of students/observations, you can see the drastic decrease in the D and F grade categories. This is great defeat. 
+
+
+```{r,message=FALSE, warning=FALSE}
+capdat$NewSATScore <- as.factor(capdat$NewSATScore)
+ggplot(capdat, aes(x = Grade, fill = NewSATScore)) + geom_bar()
+```
+
+
+As we can see from above in our column sums, there are quite a few missing values for the NewSat scores. Whereas `Score` and subsequently `Std_Score` have no missing values. It makes sense to work with the scores and Std scores. However we may revisit looking at the SAT scores since they simply deal with the Freshman class on this later. Were the freshman students prepared based upon SAT or ACt scores, did they need as much intervention? Perhaps at a later project we can determine this there for well will clean our data of these values. 
+
+```{r,message=FALSE, warning=FALSE}
+capdat<-dplyr::select(capdat, -c(NewSATScore, OldSAT, NewSAT, ACT))
+```
+
+
+Now, lets take a look at the majors and gender.
+```{r,message=FALSE, warning=FALSE}
+capdat %>% select(Gender) %>% table() %>% prop.table()
+ggplot(capdat, aes(x=Major, fill = Gender)) + geom_bar() + coord_flip()
+```
+ It is no suprise there are more females than males since Clark atlanta is 72% female and 28% male.  Majority majors with the exception of computer sciences fields are mostly female driven.It can be seen that majority of the majors are Biology, computer science, conmputer and Information Systems, Chemistry, and Dual degree Physics. Perhaps looking at the majors versus the grades would be a good observation as well. 
+ 
+```{r,message=FALSE, warning=FALSE}
+capdat$Major <- as.factor(capdat$Major)
+ggplot(capdat, aes(x = Major, fill = Grade)) + geom_bar()+ coord_flip()
+```
+
+Looking at the heavily populated majors we might be able to dig a little deeper and looking at those soley? Here below we can see exactly how many students are in each major. Biology being the largest number of students, is primarily because most students who major in Biology want to pursue their careers in the medical fields. Computer Information Systems, Computer Science, dual Degree-Physics and Chemistry are listed with the top five majors as well. 
+
+```{r}
+capdat %>% group_by(Major) %>% count() %>% arrange(desc(n))
+```
+Since we have 22 rows of different majors, lets Call a new data frame major_count and look at the majors greater than 7. Then print out the result. 
+```{r}
+major_count <- capdat %>% group_by(Major) %>% count() %>% filter(n >7) %>%arrange(desc(n))
+major_count
+```
+
+
+Lets take a look at the instructors for a bit. It appears there was a heavy load of of students taught from Mr. Jallohs class. My self second, and Mr. Bakray third.  Lets dive a little deeper to see the number of students that had intervention from the courses in respect to the instructor. 
+
+```{r}
+capdat %>% group_by(Instructor) %>% count() %>%  arrange(desc(n))
+```
+```{r,message=FALSE, warning=FALSE}
+capdat$Intervention <- as.factor(capdat$Intervention)
+ggplot(capdat, aes(x = Instructor, fill = Intervention)) + geom_bar()+coord_flip()
+```
+Wow, its pretty cool to see that the heavily student populated instructors have the mixture of students with intervention versus not. It is possbile that students take certain professors in school year? Lets take one more look at grades, intervention, and instructor. 
+
+
+```{r,message=FALSE, warning=FALSE}
+capdat$Grade <- as.factor(capdat$Grade)
+ggplot(capdat, aes(x = Instructor, fill = Grade)) + geom_bar()+coord_flip()
+```
+
+
+```{r}
+inst_maj <- capdat %>% group_by(Instructor, Major) %>% count() %>% arrange(desc(n))
+inst_maj
+```
+
+```{r}
+ggplot(inst_maj %>% filter(Major %in% unique(major_count$Major)) , aes(x = Instructor, y = n, fill = Major)) + geom_bar(stat = 'identity') +
+  coord_flip()
+```
+
+This is a great visual representation of the total number of students each professor taught, filled with the  students particular major. 
+
+
+Perhaps we can consider the Intervention control and treated  groups in relation to the major 
+
+```{r}
+capdat %>% filter(Intervention == 1) %>% count(Major) %>% 
+  ggplot(aes(x = reorder(Major, n), y = n, fill = Major)) + geom_bar(stat = 'identity') + coord_flip() +
+  xlab('Major') + theme(legend.position = "none")
+```
+
+No intervention
+```{r}
+capdat %>% filter(Intervention == 0) %>% count(Major) %>% 
+  ggplot(aes(x = reorder(Major, n), y = n, fill = Major)) + geom_bar(stat = 'identity') + coord_flip() +
+  xlab('Major') + theme(legend.position = "none")
+```
+ Of course Biology would have the most treated students vs the contol group. However it is interesting to see that top five majors as stated before are mostly from the control group and the invention group, just in a different order. 
+
+
+```{r}
+new_data <- filter(capdat, Major == "Biology" | Major == "Computer Science" | Major == "Computer and Information Sys" | Major == "Chemistry" | Major == "Dual Deg Engineer - Physics")
+
+```
+
+
+```{r}
+major_count1 <- new_data %>% group_by(Major) %>% count()
+major_count1
+```
+
+```{r}
+
+ggplot(new_data, aes(x = Grade, fill = Intervention)) + geom_bar()
+
+
+```
+
+
+##Statistical Analysis on Capstone
+
+Now that I have cleaned, wrangled and slightly explored my data. Let’s get into the statistical analysis. I have created several different plots in the exploratory analysis. Plunging a little deeper into some statistics from our data, we might find some more insightful information. 
+
+```{r}
+dat_stats <- read.csv("capdat.csv")
+```
+
+Now, the libraries that are necessary to show the skills learned are loaded into are loaded.
+
+```{r}
+library(tidyverse)
+```
+
+
+Lets first create a box plot for the standard scores and scores.
+
+```{r}
+boxplot(Std_Score~Intervention, data = dat_stats)
+boxplot(Score~Intervention, data = dat_stats)
+```
+
+
+Scatter plots are good tools to observe the relationships between variables. The data divided by the Intervention type, is plotted showing the particular earned grade by major. 
+
+```{r}
+ggplot(dat_stats, aes(x = Grade, y = Major, color=factor(Intervention))) +
+  geom_point()
+```
+
+Here is a table of the number of students that earned a particular grade is displayed.
+
+```{r}
+table(dat_stats$Grade)
+```
+
+This particular histogram determines the major that takes the course more frequently, as well as the breakdown of grades by major.Looking at the plots created, there are quite a few majors with very small numbers. We will need to filter the data to eliminate such values later. 
+
+```{r}
+dat_hist <- ggplot(dat_stats, aes(Major))
+dat_hist + geom_bar(aes(fill=Grade), width = 0.6) + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Frequency of Major with Earned Final Grades") 
+```
+
+Let’s first determine the difference in means between the control and treated groups.
+I believe it is vital to our data the we find them separately. Thus the means for these groups are calculated for the outcome variable.  We also determine the number of students in each group.  The treatement and control group are labelled 1, 0 respectively. 
+
+```{r}
+dat_stats %>%
+  dplyr::group_by(Intervention) %>%
+  dplyr::summarise(n_students = n(),
+            mean_Score = mean(Score),
+            std_error = sd(Score) / sqrt(n_students))
+```
+
+Also, run the same above code but this time we use the standard score.  The standard score is the standard z-score.
+
+```{r}
+dat_stats %>%
+  dplyr:: group_by(Intervention) %>%
+  dplyr:: summarise(n_students = n(),
+            mean_Std_Score = mean(Std_Score),
+            std_error = sd(Std_Score) / sqrt(n_students))
+```
+
+The mean of the observation, or the entire population might have some value to us later. 
+
+```{r}
+mean(dat_stats$Score)
+```
+
+
+ I will also attempt to use a t-test. A t test tells you how signiicant the differences between the score and std_score are. In simplest terms it will let us know if the measured averages of the groups could have happened by chance. If our data gives us low p-values such as  p < 0.05 then, these are good values and indicate our data did not occur by chance. The greater the p value means the more like the intervention just happened "by chance". It can also compare the means of the control and treatment groups to determine if their is a difference in the means. 
+```{r}
+with(dat_stats, t.test(Std_Score ~ Intervention))
+with(dat_stats, t.test(Score ~ Intervention))
+```
+Our p values are greater than 0.05, which means the grades could have happened by chance. 
+
+
+
+Lets look at the data, eliminating those majors that are extremely low. Let use the data sat that was created in out exploratory anaylsis new_data. 
+
+Determine the difference in means between the control and treated groups. 
+```{r}
+
+new_data %>%
+  dplyr::group_by(Intervention) %>%
+  dplyr::summarise(n_students = n(),
+            AvgScore = mean(Score),
+            std_error = sd(Score) / sqrt(n_students))
+
+```
+ The std_error is quite low, this is actually a good thing. The smaller the error, the less the spread and the more less the spread, the more likely the mean is closest to the population mean. 
+ 
+ 
+ Now, calculate the differences in means for the standardized score "Std_Score" grouping by treatment (1) and control (0) groups for the outcome variable. 
+ 
+```{r}
+new_data %>%
+  dplyr:: group_by(Intervention) %>%
+  dplyr:: summarise(n_students = n(),
+            AvgStdScore = mean(Std_Score),
+            std_error = sd(Std_Score) / sqrt(n_students))
+```
+ 
+ 
+ Again a t test tells you how signiicant the differences between the score and std_score are.  
+ 
+```{r}
+with(new_data, t.test(Std_Score ~ Intervention))
+with(new_data, t.test(Score ~ Intervention))
+```
+
+Our results have a bit of a difference. I anticiapted the p would be less than 0.05.Our p value is quite higher than from our raw data.  Could the intevention grades just happen by chance? Perhaps we can do a variance test as well to double check. 
+```{r}
+with(new_data, var.test(Std_Score, Score))
+```
+ The variance looks good and there is a small interval. At this time we can move onto to the propensity portion using MatchIt. Guiding thru MatchIt, there was toons of information that makes this the perfect package to utlize. 
+ 
+ MatchIt implements the suggestions for improving parametric statistical models and reducing model dependence.  When matching select duplicate observations from our data, hence this must be done without inducing bias and the is no dependcencey on the outome variable. "The simplest way to obtain good matches is to use one-to-one exact matching, which pairs each treated unit with one control unit for which the values of Xi are identical. However, with many covariates and finite numbers of potential matches, sufficient exact matches often cannot be found." 
+ 
+ For that reason the nearest neighbor in MatchIt will be more applicable. Nearest neighbor matching selects the r best control matches for each individual
+in the treatment group (excluding those discarded using the discard option). Matching is done using a distance measure specified by the distance option. 
+
+
+Take a quick glimpse at your data to make sure all necessary values have 1 or 0, as well as see if there are any missing values in our catergories that we did not see.  
+```{r}
+glimpse(new_data)
+```
+There are a few variables missing there for we will omit the NA values and call it new_dat. And load MatchIt 
+
+```{r}
+library(MatchIt)
+new_dat <- na.omit(new_data)
+```
+
+```{r}
+glimpse(new_dat)
+```
+
+
+
+```{r}
+mod_match <- matchit(Intervention ~  Gender + Race + Pell + Generation,
+                     method = 'nearest', data = new_dat)
+summary(mod_match)
+```
+ 
+ 
+```{r}
+plot(mod_match)
+```
+ 
+```{r}
+mod_match1 <- match.data(mod_match)
+write.csv(mod_match1, file= "mod_match")
+```
+ 
+ There were 99 matched from the Intervention (treated group), based on the similiar observation. This is still a good number students. 
+ 
+ 
+
+```{r}
+lm_treat1 <- lm(Score ~ Race + Pell + Generation + Gender, data = mod_match1)
+summary(lm_treat1)
+```
+
+```{r}
+plot(lm_treat1)
+```
+ 
+ 
+ Drop the generation and gender sign
+ 
+```{r}
+lm_treat2 <- lm(Score ~ Race + Pell, data = mod_match1)
+summary(lm_treat2)
+```
+
+```{r}
+plot(lm_treat2)
+```
+
+
+ Unfortunately, this model is not a good predictor in either case. However, there is some good statistcal information, for instance the p-value when we extract the race and pell is spot on. Meaning students are not by chance making better grades in the course. 
